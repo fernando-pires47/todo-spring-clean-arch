@@ -231,6 +231,10 @@ To run with docker-compose:
  docker-compose up -d
 ```
 
+### Future features
+* Implement basic auth
+* Implement KeyClock auth
+
 
 ## License
 
