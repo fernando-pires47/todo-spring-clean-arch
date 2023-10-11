@@ -1,0 +1,70 @@
+name: CI/CD TODO Spring Clean Arch
+
+on:
+  push:
+    branches: [ "main" ]
+
+  workflow_dispatch:
+
+env:
+  PROJECT: ${{ secrets.DOCKER_REPO }}:todo-spring-clean-arch
+
+jobs:
+
+  integration:
+    if: "startsWith(github.event.head_commit.message, 'Build')"
+    name: Test - Units & Integrations
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: 17
+          cache: 'maven'
+
+      - name: Maven Package
+        run: mvn -B clean package -DskipTests
+
+      - name: Maven Verify
+        run: mvn -B clean verify
+
+  delivery:
+    name: Publish - Docker Hub
+    runs-on: ubuntu-20.04
+    needs: [integration]
+    steps:
+      - uses: jungwinter/split@v2
+        id: split
+        with:
+          msg: ${{ github.event.head_commit.message }}
+      - uses: actions/checkout@v3
+      - name: Login to Docker Hub
+        run: docker login -u ${{ secrets.DOCKER_USER }} -p ${{ secrets.DOCKER_PASS }}
+      - name: Build Docker image
+        run: docker build -t $PROJECT-${{ steps.split.outputs._1 }} .
+      - name: Publish Docker image
+        run: docker push $PROJECT-${{ steps.split.outputs._1 }}
+
+  deploy:
+    name: Deploy - SSH Connection
+    runs-on: ubuntu-20.04
+    needs: [ integration,delivery ]
+    steps:
+      - uses: jungwinter/split@v2
+        id: split
+        with:
+          msg: ${{ github.event.head_commit.message }}
+      - name: install ssh keys
+        # check this thread to understand why its needed:
+        # https://stackoverflow.com/a/70447517
+        run: |
+          install -m 600 -D /dev/null ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ secrets.HOST }}" > ~/.ssh/known_hosts
+      - name: connect and pull
+        run: ssh ${{ secrets.USER }}@${{ secrets.HOST }} "sudo docker rm -f todo-spring || true && sudo docker run -d -p 8080:8080 --name todo-spring $PROJECT-${{ steps.split.outputs._1 }} && exit"
+      - name: cleanup
+        run: rm -rf ~/.ssh
