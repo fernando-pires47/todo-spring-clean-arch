@@ -7,6 +7,11 @@ TODO Project implementing concepts like Clean Architecture and Ports and Adapter
 * Task
 
 ### Dependencies
+* Docker
+* Docker Compose
+* Java 17
+
+### Project libs used
 * Spring Boot
 * Spring Data JPA
 * Spring Security
